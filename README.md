@@ -1,7 +1,7 @@
 Koji-progress is a tool that shows the progress of active koji builds tasks
 by checking the size of their build.log files.
 
-This is useful for monitoring the build progress of large packages that take a long time to complete.
+This is useful for monitoring the build progress of large packages that take a long time to complete, for which some arch's may take considerably longer.
 
 # Installation
 
@@ -25,6 +25,6 @@ ppc64le 15M open
 
 # Todo
 
-- access task or build url
-- watch until finish
+- accept task or build url
+- watch tasks until complete
 - compare sizes with previous build
