@@ -1,5 +1,8 @@
 Koji-progress is a tool that shows the progress of active koji builds
-by checking the size of their build.log files
+by checking the size of their build.log files.
+
+This useful for monitoring the builds of large packages that take a long time
+to complete.
 
 # Installation
 
@@ -12,6 +15,8 @@ $ cabal install
 # Usage
 
 ```
+$ koji list-tasks --mine
+:
 $ ~/.cabal/bin/koji-progress 29986248  # ← Koji taskid
 qemu-3.0.0-1.fc29.src.rpm
 aarch64 7.2M open
