@@ -2,6 +2,7 @@ import Network.HTTP.Client
 import Network.HTTP.Client.TLS (tlsManagerSettings)
 import Network.HTTP.Types.Status (Status(..))
 
+import Control.Monad (when)
 import qualified Data.ByteString.Lazy.Char8 as B
 import qualified Data.ByteString.Char8 as BS
 import Data.Maybe (mapMaybe)
@@ -23,10 +24,10 @@ buildlogSize :: Manager -> [B.ByteString] -> IO ()
 buildlogSize manager [taskid, state, _, _, arch] = do
   request <- parseRequest taskUrl
   response <- httpLbs request manager
-  processResponse response $ do
+  processResponse response $
+    when (state == B.pack "class=taskopen") $ do
       B.putStr $ B.snoc arch ' '
-      B.putStr $ last. B.words . head . filterByPrefix buildlogPrefix $ B.lines $ responseBody response
-      B.putStrLn $ B.cons ' ' $ B.pack (if state == B.pack "class=taskopen" then "open" else "closed")
+      B.putStrLn $ last. B.words . head . filterByPrefix buildlogPrefix $ B.lines $ responseBody response
   where
     taskUrl = "https://kojipkgs.fedoraproject.org/work/tasks/" ++ lastFour ++ "/" ++ B.unpack taskid
     lastFour = drop 4 $ B.unpack taskid
