@@ -11,6 +11,7 @@ $ cabal install
 
 # Usage
 
+```
 $ ~/.cabal/bin/koji-progress 29986248  # ← Koji taskid
 qemu-3.0.0-1.fc29.src.rpm
 aarch64 7.2M open
