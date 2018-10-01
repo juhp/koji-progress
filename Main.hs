@@ -17,10 +17,13 @@ main = do
   response <- httpLbs request manager
   processResponse response $ do
     let tasks = map (B.words . B.filter (/= '\"')) . filterBySuffix ")</a>" . filterByPrefix "          <a href=\"taskinfo?taskID=" $ B.lines $ responseBody response
+    printNVR tasks
     mapM_ (buildlogSize manager) tasks
 
+type Task = [B.ByteString]
+
 -- ["29967409","class=taskclosed","title=closed>buildArch","(ghc-8.4.3-71.module_1901+3deb4555.src.rpm,","x86_64"]
-buildlogSize :: Manager -> [B.ByteString] -> IO ()
+buildlogSize :: Manager -> Task -> IO ()
 buildlogSize manager [taskid, state, _, _, arch] = do
   request <- parseRequest taskUrl
   response <- httpLbs request manager
@@ -47,3 +50,10 @@ filterByPrefix cs = mapMaybe (B.stripPrefix (B.pack cs))
 
 filterBySuffix :: String -> [B.ByteString] -> [B.ByteString]
 filterBySuffix cs = mapMaybe (B.stripSuffix (B.pack cs))
+
+printNVR :: [Task] -> IO ()
+printNVR (t:ts) =
+  if  length t == 5
+  then B.putStrLn $ B.tail . B.init $ t !! 3 -- remove ( and ,
+  else printNVR ts
+printNVR _ = return ()
