@@ -10,9 +10,15 @@ import System.Environment (getArgs)
 
 main :: IO ()
 main = do
-  [task] <- getArgs
-  manager <- newManager tlsManagerSettings
+  args <- getArgs
+  if null args
+    then putStrLn "Usage: koji-progress <taskid>.."
+    else do
+    manager <- newManager tlsManagerSettings
+    mapM_ (taskProgress manager) args
 
+taskProgress :: Manager -> String -> IO ()
+taskProgress manager task = do
   request <- parseRequest $ "https://koji.fedoraproject.org/koji/taskinfo?taskID=" ++ task
   response <- httpLbs request manager
   processResponse response $ do
