@@ -2,6 +2,7 @@ import Network.HTTP.Client
 import Network.HTTP.Client.TLS (tlsManagerSettings)
 import Network.HTTP.Types.Status (Status(..))
 
+import Control.Concurrent (threadDelay)
 import Control.Monad (when)
 import qualified Data.ByteString.Lazy.Char8 as B
 import qualified Data.ByteString.Char8 as BS
@@ -15,10 +16,10 @@ main = do
     then putStrLn "Usage: koji-progress <taskid>.."
     else do
     manager <- newManager tlsManagerSettings
-    mapM_ (taskProgress manager) args
+    mapM_ (taskProgress (length args == 1) manager) args
 
-taskProgress :: Manager -> String -> IO ()
-taskProgress manager task = do
+taskProgress :: Bool -> Manager -> String -> IO ()
+taskProgress loop manager task = do
   request <- parseRequest $ "https://koji.fedoraproject.org/koji/taskinfo?taskID=" ++ task
   response <- httpLbs request manager
   processResponse response $ do
@@ -29,8 +30,15 @@ taskProgress manager task = do
       then buildlogSize manager $ map B.pack [task, "class=taskopen", "", ""] ++ [B.init $ title !! 2]
       else do
       let tasks = map (B.words . B.filter (/= '\"')) . filterBySuffix ")</a>" . filterByPrefix "          <a href=\"taskinfo?taskID=" $ body
-      printNVR tasks
-      mapM_ (buildlogSize manager) tasks
+      showTasks tasks
+      when loop $ loopTasks tasks
+        where
+          showTasks tasks = do
+            printNVR tasks
+            mapM_ (buildlogSize manager) tasks
+
+          loopTasks tasks =
+            threadDelay (60 * 10^6) >> showTasks tasks >> loopTasks tasks
 
 type Task = [B.ByteString]
 
