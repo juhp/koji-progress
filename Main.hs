@@ -30,7 +30,6 @@ taskProgress manager task = do
       else do
       let tasks = map (B.words . B.filter (/= '\"')) . filterBySuffix ")</a>" . filterByPrefix "          <a href=\"taskinfo?taskID=" $ body
       printNVR tasks
-      print tasks
       mapM_ (buildlogSize manager) tasks
 
 type Task = [B.ByteString]
