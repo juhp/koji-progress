@@ -22,9 +22,16 @@ taskProgress manager task = do
   request <- parseRequest $ "https://koji.fedoraproject.org/koji/taskinfo?taskID=" ++ task
   response <- httpLbs request manager
   processResponse response $ do
-    let tasks = map (B.words . B.filter (/= '\"')) . filterBySuffix ")</a>" . filterByPrefix "          <a href=\"taskinfo?taskID=" $ B.lines $ responseBody response
-    printNVR tasks
-    mapM_ (buildlogSize manager) tasks
+    let body = B.lines $ responseBody response
+        -- <title>buildArch (ghc-8.4.4-72.fc28.src.rpm, armv7hl) | Task Info | koji</title>
+        title = (B.words . head . filterByPrefix "    <title>") body
+    if head title == B.pack "buildArch"
+      then buildlogSize manager $ map B.pack [task, "class=taskopen", "", ""] ++ [B.init $ title !! 2]
+      else do
+      let tasks = map (B.words . B.filter (/= '\"')) . filterBySuffix ")</a>" . filterByPrefix "          <a href=\"taskinfo?taskID=" $ body
+      printNVR tasks
+      print tasks
+      mapM_ (buildlogSize manager) tasks
 
 type Task = [B.ByteString]
 
