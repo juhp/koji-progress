@@ -34,7 +34,7 @@ taskProgress loop manager task = do
         -- <title>buildArch (ghc-8.4.4-72.fc28.src.rpm, armv7hl) | Task Info | koji</title>
     let title = T.words . T.concat $ cursor $/ element "head" &/ element "title" &// content
     if head title == "buildArch"
-      then buildlogSize manager False $ Task task True (T.init . T.tail $ title !! 1) (T.init $ title !! 2)
+      then buildlogSize manager False $ Task task "" (T.init . T.tail $ title !! 1) (T.init $ title !! 2)
       else do
       let tasks = mapMaybe linkToTask $ cursor $/ element "body" &// element "span" >=> attributeIs "class" "treeLabel" &/ element "a"
       showTasks True tasks
@@ -47,8 +47,11 @@ taskProgress loop manager task = do
           loopTasks tasks =
             when (any open tasks) $
             threadDelay (60 * 1000000) >> showTasks False tasks >> loopTasks tasks
+            where
+              open :: Task -> Bool
+              open t = state t == "open"
 
-data Task = Task {_taskid :: String, open :: Bool, nvr :: T.Text, _arch :: T.Text}
+data Task = Task {_taskid :: String, state :: T.Text, nvr :: T.Text, _arch :: T.Text}
 
 linkToTask :: Cursor -> Maybe Task
 linkToTask e =
@@ -57,25 +60,25 @@ linkToTask e =
     if head txt == "buildSRPMFromSCM"
     then Nothing
     else
-      let state = attribute "title" e
-          topen = state == ["open"]
+      let tstate = head $ attribute "title" e
           href = attribute "href" e
           tid = T.unpack $ fromMaybe (error "bad href") $ T.stripPrefix "taskinfo?taskID=" $ head href
           tnvr = T.init . T.tail $ txt !! 1
           tarch = T.init $ txt !! 2
-      in Just $ Task tid topen tnvr tarch
+      in Just $ Task tid tstate tnvr tarch
 
 buildlogSize :: Manager -> Bool -> Task -> IO ()
-buildlogSize manager closed (Task taskid topen _nvr arch) = do
+buildlogSize manager closed (Task taskid tstate _nvr arch) = do
   request <- parseRequest taskUrl
   response <- httpLbs request manager
+  let open = tstate == "open"
   processResponse response $
-    when (closed || topen) $ do
+    when (closed || open) $ do
       T.putStr $ T.append arch " "
       let cursor = fromDocument $ parseLBS $ responseBody response
           buildlog = T.words . head . content . head $ cursor $/ element "body" &// element "a" >=> attributeIs "href" "build.log" >=> followingSibling
       T.putStr $ buildlog !! 2
-      putStrLn $ if closed then (if topen then "" else " closed") else ""
+      T.putStrLn $ if closed then (if open then "" else T.cons ' ' tstate) else ""
         where
           taskUrl = "https://kojipkgs.fedoraproject.org/work/tasks/" ++ lastFew ++ "/" ++ taskid
           lastFew =
