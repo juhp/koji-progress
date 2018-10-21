@@ -1,13 +1,19 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 import Network.HTTP.Client
 import Network.HTTP.Client.TLS (tlsManagerSettings)
 import Network.HTTP.Types.Status (Status(..))
 
 import Control.Concurrent (threadDelay)
 import Control.Monad (when)
-import qualified Data.ByteString.Lazy.Char8 as B
-import qualified Data.ByteString.Char8 as BS
-import Data.Maybe (mapMaybe)
+import qualified Data.ByteString.Char8 as B
+import qualified Data.Text as T
+import qualified Data.Text.IO as T
+import Data.Maybe (fromMaybe, mapMaybe)
 import System.Environment (getArgs)
+
+import Text.HTML.DOM
+import Text.XML.Cursor
 
 main :: IO ()
 main = do
@@ -23,57 +29,61 @@ taskProgress loop manager task = do
   request <- parseRequest $ "https://koji.fedoraproject.org/koji/taskinfo?taskID=" ++ task
   response <- httpLbs request manager
   processResponse response $ do
-    let body = B.lines $ responseBody response
+    let cursor = fromDocument $ parseLBS $ responseBody response
+
         -- <title>buildArch (ghc-8.4.4-72.fc28.src.rpm, armv7hl) | Task Info | koji</title>
-        title = (B.words . head . filterByPrefix "    <title>") body
-    if head title == B.pack "buildArch"
-      then buildlogSize manager $ map B.pack [task, "class=taskopen", "", ""] ++ [B.init $ title !! 2]
+    let title = T.words . T.concat $ cursor $/ element "head" &/ element "title" &// content
+    if head title == "buildArch"
+      then buildlogSize manager False $ Task task True (T.init . T.tail $ title !! 1) (T.init $ title !! 2)
       else do
-      let tasks = map (B.words . B.filter (/= '\"')) . filterBySuffix ")</a>" . filterByPrefix "          <a href=\"taskinfo?taskID=" $ body
-      showTasks tasks
+      let tasks = mapMaybe linkToTask $ cursor $/ element "body" &// element "span" >=> attributeIs "class" "treeLabel" &/ element "a"
+      showTasks True tasks
       when loop $ loopTasks tasks
         where
-          showTasks tasks = do
-            printNVR tasks
-            mapM_ (buildlogSize manager) tasks
+          showTasks closed tasks = do
+            T.putStrLn . nvr $ head tasks
+            mapM_ (buildlogSize manager closed) tasks
 
           loopTasks tasks =
-            threadDelay (60 * 10^6) >> showTasks tasks >> loopTasks tasks
+            when (any open tasks) $
+            threadDelay (60 * 1000000) >> showTasks False tasks >> loopTasks tasks
 
-type Task = [B.ByteString]
+data Task = Task {_taskid :: String, open :: Bool, nvr :: T.Text, _arch :: T.Text}
 
--- ["29967409","class=taskclosed","title=closed>buildArch","(ghc-8.4.3-71.module_1901+3deb4555.src.rpm,","x86_64"]
-buildlogSize :: Manager -> Task -> IO ()
-buildlogSize manager [taskid, state, _, _, arch] = do
+linkToTask :: Cursor -> Maybe Task
+linkToTask e =
+  let cnt = content . head $ child e
+      txt = T.words . head $ cnt in
+    if head txt == "buildSRPMFromSCM"
+    then Nothing
+    else
+      let state = attribute "title" e
+          topen = state == ["open"]
+          href = attribute "href" e
+          tid = T.unpack $ fromMaybe (error "bad href") $ T.stripPrefix "taskinfo?taskID=" $ head href
+          tnvr = T.init . T.tail $ txt !! 1
+          tarch = T.init $ txt !! 2
+      in Just $ Task tid topen tnvr tarch
+
+buildlogSize :: Manager -> Bool -> Task -> IO ()
+buildlogSize manager closed (Task taskid topen _nvr arch) = do
   request <- parseRequest taskUrl
   response <- httpLbs request manager
   processResponse response $
-    when (state == B.pack "class=taskopen") $ do
-      B.putStr $ B.snoc arch ' '
-      B.putStrLn $ last. B.words . head . filterByPrefix buildlogPrefix $ B.lines $ responseBody response
-  where
-    taskUrl = "https://kojipkgs.fedoraproject.org/work/tasks/" ++ lastFour ++ "/" ++ B.unpack taskid
-    lastFour = drop 4 $ B.unpack taskid
-
-    buildlogPrefix = "<img src=\"/icons/text.gif\" alt=\"[TXT]\"> <a href=\"build.log\">build.log</a>"
-
-buildlogSize _ _ = return ()
+    when (closed || topen) $ do
+      T.putStr $ T.append arch " "
+      let cursor = fromDocument $ parseLBS $ responseBody response
+          buildlog = T.words . head . content . head $ cursor $/ element "body" &// element "a" >=> attributeIs "href" "build.log" >=> followingSibling
+      T.putStr $ buildlog !! 2
+      putStrLn $ if closed then (if topen then "" else " closed") else ""
+        where
+          taskUrl = "https://kojipkgs.fedoraproject.org/work/tasks/" ++ lastFew ++ "/" ++ taskid
+          lastFew =
+            let four = drop 4 taskid
+            in if head four == '0' then tail four else four
 
 processResponse :: Response a -> IO () -> IO ()
 processResponse response action =
     case responseStatus response of
     Status 200 _ -> action
-    Status n err -> BS.putStrLn err
-
-filterByPrefix :: String -> [B.ByteString] -> [B.ByteString]
-filterByPrefix cs = mapMaybe (B.stripPrefix (B.pack cs))
-
-filterBySuffix :: String -> [B.ByteString] -> [B.ByteString]
-filterBySuffix cs = mapMaybe (B.stripSuffix (B.pack cs))
-
-printNVR :: [Task] -> IO ()
-printNVR (t:ts) =
-  if  length t == 5
-  then B.putStrLn $ B.tail . B.init $ t !! 3 -- remove ( and ,
-  else printNVR ts
-printNVR _ = return ()
+    Status n err -> B.putStrLn $ B.append (B.pack $ show n ++ " ") err
