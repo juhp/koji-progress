@@ -79,8 +79,8 @@ buildlogSize manager closed (Task taskid topen _nvr arch) = do
         where
           taskUrl = "https://kojipkgs.fedoraproject.org/work/tasks/" ++ lastFew ++ "/" ++ taskid
           lastFew =
-            let four = drop 4 taskid
-            in if head four == '0' then tail four else four
+            let few = dropWhile (== '0') $ drop 4 taskid in
+              if null few then "0" else few
 
 processResponse :: Response a -> IO () -> IO ()
 processResponse response action =
