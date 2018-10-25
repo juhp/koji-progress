@@ -57,15 +57,15 @@ linkToTask :: Cursor -> Maybe Task
 linkToTask e =
   let cnt = content . head $ child e
       txt = T.words . head $ cnt in
-    if head txt == "buildSRPMFromSCM"
-    then Nothing
-    else
+    if head txt == "buildArch"
+    then
       let tstate = head $ attribute "title" e
           href = attribute "href" e
           tid = T.unpack $ fromMaybe (error "bad href") $ T.stripPrefix "taskinfo?taskID=" $ head href
           tnvr = T.init . T.tail $ txt !! 1
           tarch = T.init $ txt !! 2
       in Just $ Task tid tstate tnvr tarch
+    else Nothing
 
 buildlogSize :: Manager -> Bool -> Task -> IO ()
 buildlogSize manager closed (Task taskid tstate _nvr arch) = do
