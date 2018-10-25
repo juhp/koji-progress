@@ -25,6 +25,7 @@ executable koji-progress
                        http-client,
                        http-client-tls,
                        http-types,
+                       network-uri,
                        text,
                        xml-conduit
   -- hs-source-dirs:      

@@ -3,6 +3,7 @@
 import Network.HTTP.Client
 import Network.HTTP.Client.TLS (tlsManagerSettings)
 import Network.HTTP.Types.Status (Status(..))
+import Network.URI
 
 import Control.Concurrent (threadDelay)
 import Control.Monad (when)
@@ -19,14 +20,15 @@ main :: IO ()
 main = do
   args <- getArgs
   if null args
-    then putStrLn "Usage: koji-progress <taskid>.."
+    then putStrLn "Usage: koji-progress <taskid|taskurl>.."
     else do
     manager <- newManager tlsManagerSettings
     mapM_ (taskProgress (length args == 1) manager) args
 
 taskProgress :: Bool -> Manager -> String -> IO ()
 taskProgress loop manager task = do
-  request <- parseRequest $ "https://koji.fedoraproject.org/koji/taskinfo?taskID=" ++ task
+  let url = if isURI task then task else "https://koji.fedoraproject.org/koji/taskinfo?taskID=" ++ task
+  request <- parseRequest url
   response <- httpLbs request manager
   processResponse response $ do
     let cursor = fromDocument $ parseLBS $ responseBody response
