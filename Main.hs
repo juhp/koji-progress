@@ -13,7 +13,7 @@ import qualified Data.Text.IO as T
 import Data.Maybe (fromMaybe, mapMaybe)
 import System.Environment (getArgs)
 
-import Text.HTML.DOM
+import Text.HTML.DOM (parseLBS)
 import Text.XML.Cursor
 
 main :: IO ()
