@@ -3,6 +3,7 @@
 import Network.HTTP.Client
 import Network.HTTP.Client.TLS (tlsManagerSettings)
 import Network.HTTP.Types.Status (Status(..))
+import Network.HTTP.Directory
 import Network.URI
 
 import Control.Concurrent (threadDelay)
@@ -11,7 +12,9 @@ import qualified Data.ByteString.Char8 as B
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Data.Maybe (fromMaybe, mapMaybe)
+
 import System.Environment (getArgs)
+import System.FilePath.Posix ((</>))
 
 import Text.HTML.DOM (parseLBS)
 import Text.XML.Cursor
@@ -71,21 +74,17 @@ linkToTask e =
 
 buildlogSize :: Manager -> Bool -> Task -> IO ()
 buildlogSize manager closed (Task taskid tstate _nvr arch) = do
-  request <- parseRequest taskUrl
-  response <- httpLbs request manager
   let open = tstate == "open"
-  processResponse response $
-    when (closed || open) $ do
-      T.putStr $ T.append arch " "
-      let cursor = fromDocument $ parseLBS $ responseBody response
-          buildlog = T.words . head . content . head $ cursor $/ element "body" &// element "a" >=> attributeIs "href" "build.log" >=> followingSibling
-      T.putStr $ buildlog !! 2
-      T.putStrLn $ if closed then (if open then "" else T.cons ' ' tstate) else ""
-        where
-          taskUrl = "https://kojipkgs.fedoraproject.org/work/tasks/" ++ lastFew ++ "/" ++ taskid
-          lastFew =
-            let few = dropWhile (== '0') $ drop 4 taskid in
-              if null few then "0" else few
+  when (closed || open) $ do
+    T.putStr $ T.append arch " "
+    size <- httpFileSize manager buildlog
+    maybe (return ()) (putStr . show) size
+    T.putStrLn $ if closed then (if open then "" else T.cons ' ' tstate) else ""
+      where
+        buildlog = "https://kojipkgs.fedoraproject.org/work/tasks" </> lastFew </> taskid </> "build.log"
+        lastFew =
+          let few = dropWhile (== '0') $ drop 4 taskid in
+            if null few then "0" else few
 
 processResponse :: Response a -> IO () -> IO ()
 processResponse response action =

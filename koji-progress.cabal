@@ -21,9 +21,11 @@ executable koji-progress
   -- other-extensions:    
   build-depends:       base < 5,
                        bytestring,
+                       filepath,
                        html-conduit,
                        http-client,
                        http-client-tls,
+                       http-directory,
                        http-types,
                        network-uri,
                        text,
