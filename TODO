@@ -1,0 +1,3 @@
+- koji list-tasks --mine --method=buildArch --quiet
+- support builds as well as tasks
+- actually finish rather than loop indefinitely
