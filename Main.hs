@@ -8,7 +8,9 @@ import Network.URI
 
 import Control.Concurrent (threadDelay)
 import Control.Monad (when)
+
 import qualified Data.ByteString.Char8 as B
+import Data.ByteUnits
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Data.Maybe (fromMaybe, mapMaybe)
@@ -78,7 +80,9 @@ buildlogSize manager closed (Task taskid tstate _nvr arch) = do
   when (closed || open) $ do
     T.putStr $ T.append arch " "
     size <- httpFileSize manager buildlog
-    maybe (return ()) (putStr . show) size
+    let humanSize s =
+          getShortHand $ getAppropriateUnits $ ByteValue (fromInteger s) Bytes
+    maybe (return ()) (putStr . humanSize) size
     T.putStrLn $ if closed then (if open then "" else T.cons ' ' tstate) else ""
       where
         buildlog = "https://kojipkgs.fedoraproject.org/work/tasks" </> lastFew </> taskid </> "build.log"
