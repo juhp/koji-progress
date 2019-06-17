@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                koji-progress
-version:             0.1.0.0
+version:             0.2.0
 synopsis:            Checks build progress of a koji task
 -- description:         
 license:             GPL-3
@@ -21,16 +21,12 @@ executable koji-progress
   -- other-extensions:    
   build-depends:       base < 5,
                        bytestring,
-                       filepath,
-                       html-conduit,
-                       http-client,
-                       http-client-tls,
-                       http-directory,
-                       http-types,
-                       network-uri,
-                       text,
                        byteunits,
-                       xml-conduit
+                       filepath,
+                       http-client,
+                       http-directory,
+                       simple-cmd,
+                       split
   -- hs-source-dirs:      
   default-language:    Haskell2010
   GHC-options:        -fwarn-missing-signatures -Wall
