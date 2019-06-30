@@ -1,5 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
+import Control.Monad (unless, when)
+
 import Network.HTTP.Client (Manager)
 import Network.HTTP.Directory
 
@@ -8,7 +10,7 @@ import Control.Concurrent (threadDelay)
 import Data.ByteUnits
 import Data.List (isSuffixOf)
 import Data.List.Split (splitOn)
-import Data.Maybe (catMaybes, mapMaybe)
+import Data.Maybe (isJust, fromJust, mapMaybe)
 
 import SimpleCmd
 
@@ -23,25 +25,23 @@ main = do
       then do
       tasklines <- do
         mine <- kojiListBuildTasks Nothing
-        if mine == ["(no tasks)"] then
-          kojiListBuildTasks $ Just "mbs/mbs.fedoraproject.org"
+        if mine == ["(no tasks)"] then do
+          mods <- kojiListBuildTasks $ Just "mbs/mbs.fedoraproject.org"
+          if null mods
+            then error "no modular builds"
+            else return mods
           else return mine
       return $ map (head . words) tasklines
       else return args
-  getBuildTask tasks
-
-type BuildTask = [TaskInfo]
-
-getBuildTask :: [String] -> IO ()
-getBuildTask tasks = do
   btasks <- mapM kojiTaskinfoRecursive tasks
   mgr <- httpManager
-  checkBuildTasks mgr btasks
+  loopBuildTasks mgr btasks
   where
-    kojiTaskinfoRecursive :: String -> IO [TaskInfo]
+    kojiTaskinfoRecursive :: String -> IO [TaskInfoSize]
     kojiTaskinfoRecursive tid = do
       output <- kojiTaskInfo tid
-      return $ mapMaybe parseChunk $ chunks [] [] output
+      let tasks = mapMaybe parseChunk $ chunks [] [] output
+      return $ zip tasks (repeat Nothing)
 
     chunks :: [[String]] -> [String] -> [String] -> [[String]]
     chunks as [] [] = as
@@ -52,27 +52,11 @@ getBuildTask tasks = do
       then chunks as chnk ls
       else chunks as (chnk ++ [l]) ls
 
-checkBuildTasks :: Manager -> [BuildTask] -> IO ()
-checkBuildTasks _ [] = return ()
-checkBuildTasks mgr bts = do
-  cur <- mapM runProgress bts
-  threadDelay (60 * 1000000)
-  new <- mapM updateBuildTask cur
-  checkBuildTasks mgr new
-  where
-    runProgress :: BuildTask -> IO BuildTask
-    runProgress tasks = do
-      putStrLn $ taskNVR (head tasks)
-      mapM_ (buildlogSize mgr) tasks
-      return $ filter (\ t -> taskState t == "open") tasks
+type BuildTask = [TaskInfoSize]
 
-    updateBuildTask :: BuildTask -> IO BuildTask
-    updateBuildTask tasks =
-      catMaybes <$> mapM updateTask tasks
-
-    updateTask :: TaskInfo -> IO (Maybe TaskInfo)
-    updateTask task =
-      parseChunk <$> kojiTaskInfo (taskId task)
+type Size = Maybe Integer
+type TaskInfoSize = (TaskInfo,Size)
+type TaskInfoSizes = (TaskInfo,(Size,Size))
 
 data TaskInfo =
   Taskinfo {taskId, taskNVR :: String,
@@ -81,6 +65,32 @@ data TaskInfo =
             _taskBuildLog :: String}
 
 type TaskState = String
+
+loopBuildTasks :: Manager -> [BuildTask] -> IO ()
+loopBuildTasks _ [] = return ()
+loopBuildTasks mgr bts = do
+  curs <- mapM runProgress bts
+  threadDelay (60 * 1000000)
+  news <- mapM updateBuildTask curs
+  loopBuildTasks mgr news
+  where
+    runProgress :: BuildTask -> IO BuildTask
+    runProgress tasks = do
+      unless (null tasks) $ do
+        putStrLn ""
+        putStrLn $ taskNVR $ (fst . head) tasks
+      sizes <- mapM (buildlogSize mgr) tasks
+      mapM_ printLogSize sizes
+      let news = map (\(t,(s,_)) -> (t,s)) sizes
+      return $ filter (\ (t,_) -> taskState t == "open") news
+
+    updateBuildTask :: BuildTask -> IO BuildTask
+    updateBuildTask = mapM updateTask
+
+    updateTask :: TaskInfoSize -> IO TaskInfoSize
+    updateTask (task,size) = do
+      new <- parseChunk <$> kojiTaskInfo (taskId task)
+      return (fromJust new,size)
 
 parseChunk :: [String] -> Maybe TaskInfo
 parseChunk ts =
@@ -99,19 +109,27 @@ parseChunk ts =
     selectFields [f] | "/build.log" `isSuffixOf` f = Just ("Buildlog", takeFileName f)
     selectFields _ = Nothing
 
-buildlogSize :: Manager -> TaskInfo -> IO ()
-buildlogSize mgr (Taskinfo tid _srpm arch state _) = do
-  putStr $ arch ++ " "
+buildlogSize :: Manager -> TaskInfoSize -> IO TaskInfoSizes
+buildlogSize mgr (task@(Taskinfo tid _srpm _arch _state _), old) = do
   size <- httpFileSize mgr buildlog
+  return (task,(size,old))
+  where
+    buildlog = "https://kojipkgs.fedoraproject.org/work/tasks" </> lastFew </> tid </> "build.log"
+    lastFew =
+      let few = dropWhile (== '0') $ drop 4 tid in
+        if null few then "0" else few
+
+printLogSize :: TaskInfoSizes -> IO ()
+printLogSize (Taskinfo _tid _srpm arch state _, (size,old)) = do
+  putStr $ arch ++ " "
   let humanSize s =
         getShortHand $ getAppropriateUnits $ ByteValue (fromInteger s) Bytes
   maybe (return ()) (putStr . humanSize) size
+  let diff = (-) <$> size <*> old
+  when (isJust diff) $ putStr " ("
+  maybe (return ()) (putStr . humanSize) diff
+  when (isJust diff) $ putStr "/min)"
   putStrLn $ if state == "open" then "" else " " ++ state
-      where
-        buildlog = "https://kojipkgs.fedoraproject.org/work/tasks" </> lastFew </> tid </> "build.log"
-        lastFew =
-          let few = dropWhile (== '0') $ drop 4 tid in
-            if null few then "0" else few
 
 koji :: String -> [String] -> IO [String]
 koji c args =
