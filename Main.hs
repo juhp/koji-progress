@@ -69,10 +69,11 @@ type TaskState = String
 loopBuildTasks :: Manager -> [BuildTask] -> IO ()
 loopBuildTasks _ [] = return ()
 loopBuildTasks mgr bts = do
-  curs <- mapM runProgress bts
-  threadDelay (60 * 1000000)
-  news <- mapM updateBuildTask curs
-  loopBuildTasks mgr news
+  curs <- filter (not . null) <$> mapM runProgress bts
+  unless (null curs) $ do
+    threadDelay (60 * 1000000)
+    news <- filter (not . null) <$> mapM updateBuildTask curs
+    loopBuildTasks mgr news
   where
     runProgress :: BuildTask -> IO BuildTask
     runProgress tasks = do
