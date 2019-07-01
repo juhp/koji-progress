@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-import Control.Monad (unless, when)
+import Control.Monad (unless)
 
 import Network.HTTP.Client (Manager)
 import Network.HTTP.Directory
@@ -10,7 +10,7 @@ import Control.Concurrent (threadDelay)
 import Data.ByteUnits
 import Data.List (isSuffixOf)
 import Data.List.Split (splitOn)
-import Data.Maybe (isJust, fromJust, mapMaybe)
+import Data.Maybe (fromJust, mapMaybe)
 
 import SimpleCmd
 
@@ -122,14 +122,20 @@ buildlogSize mgr (task@(Taskinfo tid _srpm _arch _state _), old) = do
 printLogSize :: TaskInfoSizes -> IO ()
 printLogSize (Taskinfo _tid _srpm arch state _, (size,old)) = do
   putStr $ arch ++ " "
-  let humanSize s =
-        getShortHand $ getAppropriateUnits $ ByteValue (fromInteger s) Bytes
   maybe (return ()) (putStr . humanSize) size
   let diff = (-) <$> size <*> old
-  when (isJust diff) $ putStr " ("
-  maybe (return ()) (putStr . humanSize) diff
-  when (isJust diff) $ putStr "/min)"
+  putSpeed diff
   putStrLn $ if state == "open" then "" else " " ++ state
+  where
+    putSpeed :: Size -> IO ()
+    putSpeed Nothing = return ()
+    putSpeed (Just s) = do
+      putStr " ("
+      putStr $ humanSize s
+      putStr "/min)"
+
+    humanSize s =
+      getShortHand $ getAppropriateUnits $ ByteValue (fromInteger s) Bytes
 
 koji :: String -> [String] -> IO [String]
 koji c args =

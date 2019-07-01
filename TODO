@@ -1,2 +1,3 @@
 - support builds as well as tasks
 - order by log size or arch?
+- % of previous build (or finished tasks)
