@@ -30,10 +30,10 @@ main = do
       then do
       tasklines <- do
         mine <- kojiListBuildTasks Nothing
-        if mine == ["(no tasks)"] then do
+        if null mine then do
           mods <- kojiListBuildTasks $ Just "mbs/mbs.fedoraproject.org"
           if null mods
-            then error "no modular builds"
+            then error' "no user or modular builds"
             else return mods
           else return mine
       return $ map (head . words) tasklines
@@ -152,5 +152,6 @@ kojiTaskInfo tid =
   koji "taskinfo" ["-r", "-v", tid]
 
 kojiListBuildTasks :: Maybe String -> IO [String]
-kojiListBuildTasks muser =
-  koji "list-tasks" $ ["--method=build", "--quiet"] ++ [maybe "--mine" ("--user=" ++) muser]
+kojiListBuildTasks muser = do
+  res <- koji "list-tasks" $ ["--method=build", "--quiet"] ++ [maybe "--mine" ("--user=" ++) muser]
+  return $ if res == ["(no tasks)"] then [] else res
