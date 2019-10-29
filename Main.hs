@@ -71,12 +71,16 @@ data TaskInfo =
 
 type TaskState = String
 
+-- second between polls
+waitdelay :: Int
+waitdelay = 180
+
 loopBuildTasks :: Manager -> [BuildTask] -> IO ()
 loopBuildTasks _ [] = return ()
 loopBuildTasks mgr bts = do
   curs <- filter (not . null) <$> mapM runProgress bts
   unless (null curs) $ do
-    threadDelay (60 * 1000000)
+    threadDelay (waitdelay * 1000000)
     news <- filter (not . null) <$> mapM updateBuildTask curs
     loopBuildTasks mgr news
   where
@@ -137,8 +141,8 @@ printLogSize (Taskinfo _tid _srpm arch state _, (size,old)) = do
     putSpeed Nothing = return ()
     putSpeed (Just s) = do
       putStr " ("
-      putStr $ humanSize s
-      putStr "/min)"
+      putStr $ humanSize (s `div` toInteger waitdelay)
+      putStr "/s)"
 
     humanSize s =
       getShortHand $ getAppropriateUnits $ ByteValue (fromInteger s) Bytes
