@@ -74,7 +74,7 @@ type TaskState = String
 
 -- second between polls
 waitdelay :: Int
-waitdelay = 180
+waitdelay = 120
 
 loopBuildTasks :: Manager -> [BuildTask] -> IO ()
 loopBuildTasks _ [] = return ()
