@@ -42,11 +42,11 @@ main = do
   mgr <- httpManager
   loopBuildTasks mgr btasks
   where
-    kojiTaskinfoRecursive :: String -> IO [TaskInfoSize]
+    kojiTaskinfoRecursive :: String -> IO BuildTask
     kojiTaskinfoRecursive tid = do
       output <- kojiTaskInfo tid
       let tasks = mapMaybe parseChunk $ chunks [] [] output
-      return $ zip tasks (repeat Nothing)
+      return (tid, zip tasks (repeat Nothing))
 
     chunks :: [[String]] -> [String] -> [String] -> [[String]]
     chunks as [] [] = as
@@ -57,7 +57,8 @@ main = do
       then chunks as chnk ls
       else chunks as (chnk ++ [l]) ls
 
-type BuildTask = [TaskInfoSize]
+type TaskId = String
+type BuildTask = (TaskId, [TaskInfoSize])
 
 type Size = Maybe Integer
 type TaskInfoSize = (TaskInfo,Size)
@@ -85,17 +86,20 @@ loopBuildTasks mgr bts = do
     loopBuildTasks mgr news
   where
     runProgress :: BuildTask -> IO BuildTask
-    runProgress tasks = do
+    runProgress (tid,tasks) = do
       unless (null tasks) $ do
         putStrLn ""
-        putStrLn $ taskNVR $ (fst . head) tasks
+        logMsg $ taskNVR ((fst . head) tasks) ++ " (" ++ tid ++ ")"
       sizes <- mapM (buildlogSize mgr) tasks
       mapM_ printLogSize sizes
       let news = map (\(t,(s,_)) -> (t,s)) sizes
-      return $ filter (\ (t,_) -> taskState t == "open") news
+          open = filter (\ (t,_) -> taskState t == "open") news
+      return (tid, open)
 
     updateBuildTask :: BuildTask -> IO BuildTask
-    updateBuildTask = mapM updateTask
+    updateBuildTask (tid, ts) = do
+      news <- mapM updateTask ts
+      return (tid, news)
 
     updateTask :: TaskInfoSize -> IO TaskInfoSize
     updateTask (task,size) = do
