@@ -82,10 +82,10 @@ waitdelay = 120
 loopBuildTasks :: Manager -> [BuildTask] -> IO ()
 loopBuildTasks _ [] = return ()
 loopBuildTasks mgr bts = do
-  curs <- filter (not . null) <$> mapM runProgress bts
+  curs <- filter tasksOpen <$> mapM runProgress bts
   unless (null curs) $ do
     threadDelay (waitdelay * 1000000)
-    news <- filter (not . null) <$> mapM updateBuildTask curs
+    news <- mapM updateBuildTask curs
     loopBuildTasks mgr news
   where
     runProgress :: BuildTask -> IO BuildTask
@@ -98,6 +98,9 @@ loopBuildTasks mgr bts = do
       let news = map (\(t,(s,_)) -> (t,s)) sizes
           open = filter (\ (t,_) -> taskState t == "open") news
       return (tid, open)
+
+    tasksOpen :: BuildTask -> Bool
+    tasksOpen (_,ts) = not (null ts)
 
     updateBuildTask :: BuildTask -> IO BuildTask
     updateBuildTask (tid, ts) = do
