@@ -72,6 +72,7 @@ data TaskInfo =
             _taskArch :: String,
             taskState :: TaskState,
             _taskBuildLog :: String}
+  deriving Show
 
 type TaskState = String
 
