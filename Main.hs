@@ -142,12 +142,14 @@ buildlogSize mgr (task@(Taskinfo tid _srpm _arch _state _), old) = do
 
 printLogSize :: TaskInfoSizes -> IO ()
 printLogSize (Taskinfo _tid _srpm arch state _, (size,old)) = do
-  putStr $ arch ++ " "
+  putStr $ arch ++ padding
   maybe (return ()) (putStr . humanSize) size
   let diff = (-) <$> size <*> old
   putSpeed diff
   putStrLn $ if state == "open" then "" else " " ++ state
   where
+    padding = if length arch >= 7 then " " else replicate (8 - length arch) ' '
+
     putSpeed :: Size -> IO ()
     putSpeed Nothing = return ()
     putSpeed (Just s) = do
