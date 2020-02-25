@@ -18,7 +18,7 @@ import Control.Concurrent (threadDelay)
 import Data.ByteUnits
 import Data.List (isSuffixOf)
 import Data.List.Split (splitOn)
-import Data.Maybe (fromJust, mapMaybe)
+import Data.Maybe
 
 import SimpleCmd
 
@@ -95,7 +95,7 @@ loopBuildTasks mgr bts = do
         putStrLn ""
         logMsg $ taskNVR ((fst . head) tasks) ++ " (" ++ tid ++ ")"
       sizes <- mapM (buildlogSize mgr) tasks
-      mapM_ printLogSize sizes
+      printLogSizes sizes
       let news = map (\(t,(s,_)) -> (t,s)) sizes
           open = filter (\ (t,_) -> taskState t == "open") news
       return (tid, open)
@@ -140,25 +140,42 @@ buildlogSize mgr (task@(Taskinfo tid _srpm _arch _state _), old) = do
       let few = dropWhile (== '0') $ drop 4 tid in
         if null few then "0" else few
 
-printLogSize :: TaskInfoSizes -> IO ()
-printLogSize (Taskinfo _tid _srpm arch state _, (size,old)) = do
-  putStr $ arch ++ padding
-  maybe (return ()) (putStr . humanSize) size
-  let diff = (-) <$> size <*> old
-  putSpeed diff
-  putStrLn $ if state == "open" then "" else " " ++ state
+data TaskOutput = TaskOut {_outArch :: String, outSize :: String, _outSpeed :: String, _outState :: String}
+
+printLogSizes :: [TaskInfoSizes] -> IO ()
+printLogSizes tss =
+  mapM_ (putStrLn . taskOutList) (formatSize . map logSize tss)
   where
-    padding = if length arch >= 7 then " " else replicate (8 - length arch) ' '
+    taskOutList :: TaskOutput -> String
+    taskOutList (TaskOut a si sp st) = unwords [a, si, sp, st]
 
-    putSpeed :: Size -> IO ()
-    putSpeed Nothing = return ()
-    putSpeed (Just s) = do
-      putStr " ("
-      putStr $ humanSize (s `div` toInteger waitdelay)
-      putStr "/s)"
+    formatSize :: [TaskOutput] -> [TaskOutput]
+    formatSize ts =
+      let maxlen = maximum $ map (length . outSize) ts
+      in map (justifySize maxlen) ts
 
-    humanSize s =
-      getShortHand $ getAppropriateUnits $ ByteValue (fromInteger s) Bytes
+    justifySize :: Int -> TaskOutput -> TaskOutput
+    justifySize ml (TaskOut a si sp st) =
+      TaskOut a (replicate (ml - length si) ' ' ++ si) sp st
+
+    logSize :: TaskInfoSizes -> TaskOutput
+    logSize (Taskinfo _tid _srpm arch state _, (size,old)) =
+      let arch' = arch ++ padding
+          size' = fmap humanSize size
+          diff = (-) <$> size <*> old
+          diff' = calcSpeed diff
+          state' = if state == "open" then "" else " " ++ state
+        in TaskOut arch' (fromMaybe "" size') (fromMaybe "" diff') state'
+      where
+        padding = replicate (8 - length arch) ' '
+
+        calcSpeed :: Size -> Maybe String
+        calcSpeed Nothing = Nothing
+        calcSpeed (Just s) =
+          Just $ " (" ++ humanSize (s `div` toInteger waitdelay) ++ "/s)"
+
+        humanSize s =
+          getShortHand $ getAppropriateUnits $ ByteValue (fromInteger s) Bytes
 
 koji :: String -> [String] -> IO [String]
 koji c args =
