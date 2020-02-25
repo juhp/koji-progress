@@ -144,7 +144,7 @@ data TaskOutput = TaskOut {_outArch :: String, outSize :: String, _outSpeed :: S
 
 printLogSizes :: [TaskInfoSizes] -> IO ()
 printLogSizes tss =
-  mapM_ (putStrLn . taskOutList) (formatSize . map logSize tss)
+  mapM_ (putStrLn . taskOutList) $ (formatSize . map logSize) tss
   where
     taskOutList :: TaskOutput -> String
     taskOutList (TaskOut a si sp st) = unwords [a, si, sp, st]
