@@ -16,65 +16,49 @@ import Network.HTTP.Directory
 import Control.Concurrent (threadDelay)
 
 import Data.ByteUnits
-import Data.List (isSuffixOf)
-import Data.List.Split (splitOn)
+import Data.List
 import Data.Maybe
 
+import Koji
 import SimpleCmd
+import SimpleCmdArgs
 
-import System.Environment (getArgs)
-import System.FilePath (takeBaseName, takeFileName, (</>))
+import System.FilePath (takeBaseName, (</>))
 
 main :: IO ()
-main = do
-  tasks <- do
-    args <- getArgs
-    if null args
+main =
+  simpleCmdArgs' Nothing "koji-progress" "Watch Koji build.log sizes" $
+    runOnTasks <$> many taskArg
+  where
+    taskArg = TaskId <$> argumentWith auto "TASKID"
+
+runOnTasks :: [TaskID] -> IO ()
+runOnTasks tids = do
+  tasks <-
+    if null tids
       then do
-      tasklines <- do
-        mine <- kojiListBuildTasks Nothing
-        if null mine then do
-          mods <- kojiListBuildTasks $ Just "mbs/mbs.fedoraproject.org"
-          if null mods
-            then error' "no user or modular builds"
-            else return mods
-          else return mine
-      return $ map (head . words) tasklines
-      else return args
+      mine <- kojiListBuildTasks Nothing
+      if null mine then do
+        mods <- kojiListBuildTasks $ Just "mbs/mbs.fedoraproject.org"
+        if null mods
+          then error' "no user or modular builds"
+          else return mods
+        else return mine
+      else return tids
   btasks <- mapM kojiTaskinfoRecursive tasks
   mgr <- httpManager
   loopBuildTasks mgr btasks
   where
-    kojiTaskinfoRecursive :: String -> IO BuildTask
+    kojiTaskinfoRecursive :: TaskID -> IO BuildTask
     kojiTaskinfoRecursive tid = do
-      output <- kojiTaskInfo tid
-      let tasks = mapMaybe parseChunk $ chunks [] [] output
-      return (tid, zip tasks (repeat Nothing))
+      children <- getTaskChildren tid True
+      return (tid, zip children (repeat Nothing))
 
-    chunks :: [[String]] -> [String] -> [String] -> [[String]]
-    chunks as [] [] = as
-    chunks as chnk [] = as ++ [chnk]
-    chunks as chnk ("":ls) = chunks (as ++ [chnk]) [] ls
-    chunks as chnk (l:ls) =
-      if ".rpm" `isSuffixOf` l && not (".src.rpm" `isSuffixOf` l)
-      then chunks as chnk ls
-      else chunks as (chnk ++ [l]) ls
-
-type TaskId = String
-type BuildTask = (TaskId, [TaskInfoSize])
+type BuildTask = (TaskID, [TaskInfoSize])
 
 type Size = Maybe Integer
-type TaskInfoSize = (TaskInfo,Size)
-type TaskInfoSizes = (TaskInfo,(Size,Size))
-
-data TaskInfo =
-  Taskinfo {taskId, taskNVR :: String,
-            _taskArch :: String,
-            taskState :: TaskState,
-            _taskBuildLog :: String}
-  deriving Show
-
-type TaskState = String
+type TaskInfoSize = (Struct,Size)
+type TaskInfoSizes = (Struct,(Size,Size))
 
 -- second between polls
 waitdelay :: Int
@@ -93,11 +77,15 @@ loopBuildTasks mgr bts = do
     runProgress (tid,tasks) = do
       unless (null tasks) $ do
         putStrLn ""
-        logMsg $ taskNVR ((fst . head) tasks) ++ " (" ++ tid ++ ")"
+        let request = lookupStruct "request" $ fst (head tasks) :: Maybe [Value]
+            nvr = case request of
+                    Just params -> (takeBaseName . takeBaseName . maybeVal "failed to read src rpm" . getValue . head) params
+                    Nothing -> error "No src rpm found"
+        logMsg $ nvr ++ " (" ++ displayID tid ++ ")"
       sizes <- mapM (buildlogSize mgr) tasks
       printLogSizes sizes
       let news = map (\(t,(s,_)) -> (t,s)) sizes
-          open = filter (\ (t,_) -> taskState t == "open") news
+          open = filter (\ (t,_) -> getTaskState t == Just OPEN) news
       return (tid, open)
 
     tasksOpen :: BuildTask -> Bool
@@ -110,31 +98,15 @@ loopBuildTasks mgr bts = do
 
     updateTask :: TaskInfoSize -> IO TaskInfoSize
     updateTask (task,size) = do
-      new <- parseChunk <$> kojiTaskInfo (taskId task)
-      return (fromJust new,size)
-
-parseChunk :: [String] -> Maybe TaskInfo
-parseChunk ts =
-  let task = mapMaybe (selectFields . splitOn ": ") ts in
-    if lookup "Type" task /= Just "buildArch" then Nothing
-    else do
-      taskid <- lookup "Task" task
-      nvr <- takeBaseName . takeBaseName <$> lookup "SRPM" task
-      arch <- lookup "Build Arch" task
-      state <- lookup "State" task
-      buildlog <- lookup "Buildlog" task
-      return $ Taskinfo taskid nvr arch state buildlog
-  where
-    selectFields :: [String] -> Maybe (String,String)
-    selectFields [k,v] = Just (dropWhile (== ' ') k,v)
-    selectFields [f] | "/build.log" `isSuffixOf` f = Just ("Buildlog", takeFileName f)
-    selectFields _ = Nothing
+      new <- getTaskInfo (fromJust (readID task)) True
+      return (new,size)
 
 buildlogSize :: Manager -> TaskInfoSize -> IO TaskInfoSizes
-buildlogSize mgr (task@(Taskinfo tid _srpm _arch _state _), old) = do
+buildlogSize mgr (task, old) = do
   size <- httpFileSize mgr buildlog
   return (task,(size,old))
   where
+    tid = show $ fromJust (readID' task)
     buildlog = "https://kojipkgs.fedoraproject.org/work/tasks" </> lastFew </> tid </> "build.log"
     lastFew =
       let few = dropWhile (== '0') $ drop 4 tid in
@@ -159,16 +131,16 @@ printLogSizes tss =
       TaskOut a (replicate (ml - length si) ' ' ++ si) sp st
 
     logSize :: TaskInfoSizes -> TaskOutput
-    logSize (Taskinfo _tid _srpm arch state _, (size,old)) =
-      let arch' = arch ++ padding
+    logSize (task, (size,old)) =
+      let arch = maybeVal "arch not found" $ lookupStruct "arch" task :: String
+          arch' = arch ++ replicate (8 - length arch) ' '
           size' = fmap humanSize size
           diff = (-) <$> size <*> old
           diff' = calcSpeed diff
-          state' = if state == "open" then "" else " " ++ state
+          state = maybeVal "No state found" $ getTaskState task
+          state' = if state == OPEN then "" else " " ++ show state
         in TaskOut arch' (fromMaybe "" size') (fromMaybe "" diff') state'
       where
-        padding = replicate (8 - length arch) ' '
-
         calcSpeed :: Size -> Maybe String
         calcSpeed Nothing = Nothing
         calcSpeed (Just s) =
@@ -177,15 +149,17 @@ printLogSizes tss =
         humanSize s =
           getShortHand $ getAppropriateUnits $ ByteValue (fromInteger s) Bytes
 
-koji :: String -> [String] -> IO [String]
-koji c args =
-  cmdLines "koji" (c:args)
-
-kojiTaskInfo :: String -> IO [String]
-kojiTaskInfo tid =
-  koji "taskinfo" ["-r", "-v", tid]
-
-kojiListBuildTasks :: Maybe String -> IO [String]
+kojiListBuildTasks :: Maybe String -> IO [TaskID]
 kojiListBuildTasks muser = do
-  res <- koji "list-tasks" $ ["--method=build", "--quiet"] ++ [maybe "--mine" ("--user=" ++) muser]
-  return $ if res == ["(no tasks)"] then [] else res
+  user <- case muser of
+            Just user -> return user
+            Nothing -> do
+              mfasid <- (removeSuffix "@FEDORAPROJECT.ORG" <$>) . find ("@FEDORAPROJECT.ORG" `isSuffixOf`) . words <$> cmd "klist" ["-l"]
+              case mfasid of
+                Just fas -> return fas
+                Nothing -> error' "Could not determine FAS id from klist"
+  mowner <- getUserID user
+  case mowner of
+    Nothing -> error "No owner found"
+    Just owner ->
+      listTaskIDs [("method", ValueString "build"), ("owner", ValueInt (getID owner)), ("state", openstates)] [("limit", ValueInt 10)]

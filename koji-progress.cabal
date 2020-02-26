@@ -19,16 +19,16 @@ executable koji-progress
 
   -- other-modules:
   -- other-extensions:
-  build-depends:
-      base            >=4 && <5
-    , bytestring
-    , byteunits
-    , filepath
-    , http-client
-    , http-directory
-    , simple-cmd
-    , split
+  build-depends: base >=4 && <5
+               , bytestring
+               , byteunits
+               , filepath
+               , http-client
+               , http-directory
+               , koji
+               , simple-cmd
+               , simple-cmd-args
 
   -- hs-source-dirs:
   default-language: Haskell2010
-  ghc-options:      -fwarn-missing-signatures -Wall
+  ghc-options:      -fwarn-missing-signatures -Wall -threaded
