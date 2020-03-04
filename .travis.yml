@@ -1,11 +1,14 @@
 language: haskell
 
-cabal: "2.4"
+branches:
+  only:
+    - master
+
+cabal: 2.4
 
 cache:
   directories:
   - "$HOME/.cabal"
-  - "$HOME/.ghc"
 
 ghc:
 - 8.8.3
