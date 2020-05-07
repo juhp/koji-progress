@@ -1,6 +1,9 @@
-resolver: lts-14.27
+resolver: lts-13.30
 
 extra-deps:
+  - simple-cmd-args-0.1.4
   - byteunits-0.4.0.2
   - git: https://github.com/juhp/koji-hs.git
     commit: 891158d99f5bbf3875dd924e1fb454c6570def42
+  - HaXml-1.25.5
+  - haxr-3000.11.4

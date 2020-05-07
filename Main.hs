@@ -19,7 +19,7 @@ import Data.ByteUnits
 import Data.List
 import Data.Maybe
 
-import Koji
+import Fedora.Koji
 import SimpleCmd
 import SimpleCmdArgs
 
