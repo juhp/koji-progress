@@ -3,4 +3,4 @@ resolver: lts-14.27
 extra-deps:
   - byteunits-0.4.0.2
   - git: https://github.com/juhp/koji-hs.git
-    commit: a052d0c62669982d017bdafbc268bab4eed9277d
+    commit: 820714301e41ac14ce3f36d3d8b03ca2c3b7c5d9

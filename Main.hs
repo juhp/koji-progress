@@ -50,11 +50,11 @@ runOnTasks tids = do
   btasks <- mapM kojiTaskinfoRecursive tasks
   mgr <- httpManager
   loopBuildTasks mgr btasks
-  where
-    kojiTaskinfoRecursive :: TaskID -> IO BuildTask
-    kojiTaskinfoRecursive tid = do
-      children <- kojiGetTaskChildren tid True
-      return (tid, zip children (repeat Nothing))
+
+kojiTaskinfoRecursive :: TaskID -> IO BuildTask
+kojiTaskinfoRecursive tid = do
+  children <- kojiGetTaskChildren tid True
+  return (tid, zip children (repeat Nothing))
 
 type BuildTask = (TaskID, [TaskInfoSize])
 
@@ -76,19 +76,25 @@ loopBuildTasks mgr bts = do
     loopBuildTasks mgr news
   where
     runProgress :: BuildTask -> IO BuildTask
-    runProgress (tid,tasks) = do
-      unless (null tasks) $ do
+    runProgress (tid,tasks) =
+      if null tasks then do
+        state <- getTaskState <$> kojiGetTaskInfo tid
+        if state `elem` map Just openTaskStates then do
+          threadDelay (waitdelay * 100000)
+          kojiTaskinfoRecursive tid
+          else return (tid,[])
+      else do
         putStrLn ""
         let request = lookupStruct "request" $ fst (head tasks) :: Maybe [Value]
             nvr = case request of
                     Just params -> (takeBaseName . takeBaseName . maybeVal "failed to read src rpm" . getValue . head) params
                     Nothing -> error "No src rpm found"
         logMsg $ nvr ++ " (" ++ displayID tid ++ ")"
-      sizes <- mapM (buildlogSize mgr) tasks
-      printLogSizes sizes
-      let news = map (\(t,(s,_)) -> (t,s)) sizes
-          open = filter (\ (t,_) -> getTaskState t == Just TaskOpen) news
-      return (tid, open)
+        sizes <- mapM (buildlogSize mgr) tasks
+        printLogSizes sizes
+        let news = map (\(t,(s,_)) -> (t,s)) sizes
+            open = filter (\ (t,_) -> getTaskState t `elem` map Just openTaskStates) news
+        return (tid, open)
 
     tasksOpen :: BuildTask -> Bool
     tasksOpen (_,ts) = not (null ts)
@@ -168,4 +174,4 @@ kojiListBuildTasks muser = do
   case mowner of
     Nothing -> error "No owner found"
     Just owner ->
-      kojiListTaskIDs [("method", ValueString "build"), ("owner", ValueInt (getID owner)), ("state", openTaskStates)] [("limit", ValueInt 10)]
+      kojiListTaskIDs [("method", ValueString "build"), ("owner", ValueInt (getID owner)), ("state", openTaskValues)] [("limit", ValueInt 10)]
