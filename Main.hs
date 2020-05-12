@@ -134,7 +134,9 @@ printLogSizes tss =
 
     logSize :: TaskInfoSizes -> TaskOutput
     logSize (task, (size,old)) =
-      let arch = maybeVal "arch not found" $ lookupStruct "arch" task :: String
+      let method = maybeVal "method not found" $ lookupStruct "method" task :: String
+          arch = if method /= "buildArch" then "srpm"
+            else maybeVal "arch not found" $ lookupStruct "arch" task :: String
           arch' = arch ++ replicate (8 - length arch) ' '
           size' = fmap humanSize size
           diff = (-) <$> size <*> old
