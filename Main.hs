@@ -105,7 +105,9 @@ loopBuildTasks mgr bts = do
 
 buildlogSize :: Manager -> TaskInfoSize -> IO TaskInfoSizes
 buildlogSize mgr (task, old) = do
-  size <- httpFileSize mgr buildlog
+  exists <- if isJust old then return True
+            else httpExists mgr buildlog
+  size <- if exists then httpFileSize mgr buildlog else return Nothing
   return (task,(size,old))
   where
     tid = show $ fromJust (readID' task)
