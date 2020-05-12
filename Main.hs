@@ -20,6 +20,8 @@ import Data.List
 import Data.Maybe
 
 import Fedora.Koji
+import Fedora.Koji.API
+
 import SimpleCmd
 import SimpleCmdArgs
 
@@ -51,7 +53,7 @@ runOnTasks tids = do
   where
     kojiTaskinfoRecursive :: TaskID -> IO BuildTask
     kojiTaskinfoRecursive tid = do
-      children <- getTaskChildren tid True
+      children <- kojiGetTaskChildren tid True
       return (tid, zip children (repeat Nothing))
 
 type BuildTask = (TaskID, [TaskInfoSize])
@@ -85,7 +87,7 @@ loopBuildTasks mgr bts = do
       sizes <- mapM (buildlogSize mgr) tasks
       printLogSizes sizes
       let news = map (\(t,(s,_)) -> (t,s)) sizes
-          open = filter (\ (t,_) -> getTaskState t == Just OPEN) news
+          open = filter (\ (t,_) -> getTaskState t == Just TaskOpen) news
       return (tid, open)
 
     tasksOpen :: BuildTask -> Bool
@@ -98,7 +100,7 @@ loopBuildTasks mgr bts = do
 
     updateTask :: TaskInfoSize -> IO TaskInfoSize
     updateTask (task,size) = do
-      new <- getTaskInfo (fromJust (readID task)) True
+      new <- kojiGetTaskInfo (fromJust (readID task))
       return (new,size)
 
 buildlogSize :: Manager -> TaskInfoSize -> IO TaskInfoSizes
@@ -138,7 +140,7 @@ printLogSizes tss =
           diff = (-) <$> size <*> old
           diff' = calcSpeed diff
           state = maybeVal "No state found" $ getTaskState task
-          state' = if state == OPEN then "" else " " ++ show state
+          state' = if state == TaskOpen then "" else " " ++ show state
         in TaskOut arch' (fromMaybe "" size') (fromMaybe "" diff') state'
       where
         calcSpeed :: Size -> Maybe String
@@ -158,8 +160,8 @@ kojiListBuildTasks muser = do
               case mfasid of
                 Just fas -> return fas
                 Nothing -> error' "Could not determine FAS id from klist"
-  mowner <- getUserID user
+  mowner <- kojiGetUserID user
   case mowner of
     Nothing -> error "No owner found"
     Just owner ->
-      listTaskIDs [("method", ValueString "build"), ("owner", ValueInt (getID owner)), ("state", openstates)] [("limit", ValueInt 10)]
+      kojiListTaskIDs [("method", ValueString "build"), ("owner", ValueInt (getID owner)), ("state", openTaskStates)] [("limit", ValueInt 10)]

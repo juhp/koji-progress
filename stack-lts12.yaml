@@ -4,7 +4,7 @@ extra-deps:
   - simple-cmd-args-0.1.4
   - byteunits-0.4.0.2
   - git: https://github.com/juhp/koji-hs.git
-    commit: 891158d99f5bbf3875dd924e1fb454c6570def42
+    commit: a052d0c62669982d017bdafbc268bab4eed9277d
   - HaXml-1.25.5
   - haxr-3000.11.4
   - polyparse-1.12.1
