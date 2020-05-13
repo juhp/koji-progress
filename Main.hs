@@ -126,14 +126,14 @@ buildlogSize mgr (task, old) = do
       let few = dropWhile (== '0') $ drop 4 tid in
         if null few then "0" else few
 
-data TaskOutput = TaskOut {_outArch :: String, outSize :: String, _outSpeed :: String, _outState :: String}
+data TaskOutput = TaskOut {_outArch :: String, outSize :: String, _outSpeed :: String, _outState :: String, _method :: String}
 
 printLogSizes :: [TaskInfoSizes] -> IO ()
 printLogSizes tss =
   mapM_ (putStrLn . taskOutList) $ (formatSize . map logSize) tss
   where
     taskOutList :: TaskOutput -> String
-    taskOutList (TaskOut a si sp st) = unwords [a, si, sp, st]
+    taskOutList (TaskOut a si sp st mth) = unwords [a, si, sp, st, mth]
 
     formatSize :: [TaskOutput] -> [TaskOutput]
     formatSize ts =
@@ -141,21 +141,20 @@ printLogSizes tss =
       in map (justifySize maxlen) ts
 
     justifySize :: Int -> TaskOutput -> TaskOutput
-    justifySize ml (TaskOut a si sp st) =
-      TaskOut a (replicate (ml - length si) ' ' ++ si) sp st
+    justifySize ml (TaskOut a si sp st mth) =
+      TaskOut a (replicate (ml - length si) ' ' ++ si) sp st mth
 
     logSize :: TaskInfoSizes -> TaskOutput
     logSize (task, (size,old)) =
       let method = maybeVal "method not found" $ lookupStruct "method" task :: String
-          arch = if method /= "buildArch" then "srpm"
-            else maybeVal "arch not found" $ lookupStruct "arch" task :: String
+          arch = maybeVal "arch not found" $ lookupStruct "arch" task :: String
           arch' = arch ++ replicate (8 - length arch) ' '
           size' = fmap humanSize size
           diff = (-) <$> size <*> old
           diff' = calcSpeed diff
           state = maybeVal "No state found" $ getTaskState task
           state' = if state == TaskOpen then "" else " " ++ show state
-        in TaskOut arch' (fromMaybe "" size') (fromMaybe "" diff') state'
+        in TaskOut arch' (fromMaybe "" size') (fromMaybe "" diff') state' method
       where
         calcSpeed :: Size -> Maybe String
         calcSpeed Nothing = Nothing
