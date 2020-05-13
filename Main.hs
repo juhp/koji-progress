@@ -59,6 +59,7 @@ kojiTaskinfoRecursive tid = do
 type BuildTask = (TaskID, [TaskInfoSize])
 
 type Size = Maybe Integer
+-- FIXME change to (TaskID,Struct,Size)
 type TaskInfoSize = (Struct,Size)
 type TaskInfoSizes = (Struct,(Size,Size))
 
@@ -78,7 +79,7 @@ loopBuildTasks mgr bts = do
     runProgress :: BuildTask -> IO BuildTask
     runProgress (tid,tasks) =
       if null tasks then do
-        state <- getTaskState <$> kojiGetTaskInfo tid
+        state <- kojiGetTaskState tid
         if state `elem` map Just openTaskStates then do
           threadDelay (waitdelay * 100000)
           kojiTaskinfoRecursive tid
@@ -106,8 +107,11 @@ loopBuildTasks mgr bts = do
 
     updateTask :: TaskInfoSize -> IO TaskInfoSize
     updateTask (task,size) = do
-      new <- kojiGetTaskInfo (fromJust (readID task))
-      return (new,size)
+      let tid = fromJust (readID task)
+      mnew <- kojiGetTaskInfo tid
+      case mnew of
+        Nothing -> error' $ "TaskInfo not found for " ++ displayID tid
+        Just new -> return (new,size)
 
 buildlogSize :: Manager -> TaskInfoSize -> IO TaskInfoSizes
 buildlogSize mgr (task, old) = do
