@@ -133,7 +133,7 @@ printLogSizes tss =
   mapM_ (putStrLn . taskOutList) $ (formatSize . map logSize) tss
   where
     taskOutList :: TaskOutput -> String
-    taskOutList (TaskOut a si sp st mth) = unwords [a, si, sp, mth, st]
+    taskOutList (TaskOut a si sp st mth) = unwords [a, si, mth, sp, st]
 
     formatSize :: [TaskOutput] -> [TaskOutput]
     formatSize ts =
