@@ -15,12 +15,17 @@ import Network.HTTP.Directory
 
 import Control.Concurrent (threadDelay)
 
-import Data.ByteUnits
 import Data.List
 import Data.Maybe
+#if !MIN_VERSION_base(4,11,0)
+import Data.Monoid ((<>))
+#endif
+import Data.Text (Text)
+import qualified Data.Text as T
+import qualified Data.Text.IO as T
+import Data.Text.Format.Numbers
 
 import Fedora.Koji
-import Fedora.Koji.Internal
 
 import SimpleCmd
 import SimpleCmdArgs
@@ -88,7 +93,7 @@ loopBuildTasks mgr bts = do
         putStrLn ""
         let request = lookupStruct "request" $ fst (head tasks) :: Maybe [Value]
             nvr = case request of
-                    Just params -> (takeBaseName . takeBaseName . maybeVal "failed to read src rpm" . getValue . head) params
+                    Just params -> (takeBaseName . takeBaseName . maybeVal "failed to read src rpm" . getString . head) params
                     Nothing -> error "No src rpm found"
         logMsg $ nvr ++ " (" ++ displayID tid ++ ")"
         sizes <- mapM (buildlogSize mgr) tasks
@@ -126,43 +131,40 @@ buildlogSize mgr (task, old) = do
       let few = dropWhile (== '0') $ drop 4 tid in
         if null few then "0" else few
 
-data TaskOutput = TaskOut {_outArch :: String, outSize :: String, _outSpeed :: String, _outState :: String, _method :: String}
+data TaskOutput = TaskOut {_outArch :: Text, outSize :: Text, _outSpeed :: Text, _outState :: Text, _method :: Text}
 
 printLogSizes :: [TaskInfoSizes] -> IO ()
 printLogSizes tss =
-  mapM_ (putStrLn . taskOutList) $ (formatSize . map logSize) tss
+  mapM_ (T.putStrLn . taskOutList) $ (formatSize . map logSize) tss
   where
-    taskOutList :: TaskOutput -> String
-    taskOutList (TaskOut a si sp st mth) = unwords [a, si, mth, sp, st]
+    taskOutList :: TaskOutput -> Text
+    taskOutList (TaskOut a si sp st mth) = T.unwords [a, si, mth, sp, st]
 
     formatSize :: [TaskOutput] -> [TaskOutput]
     formatSize ts =
-      let maxlen = maximum $ map (length . outSize) ts
+      let maxlen = maximum $ map (T.length . outSize) ts
       in map (justifySize maxlen) ts
 
     justifySize :: Int -> TaskOutput -> TaskOutput
     justifySize ml (TaskOut a si sp st mth) =
-      TaskOut a (replicate (ml - length si) ' ' ++ si) sp st mth
+      TaskOut a (T.replicate (ml - T.length si) " " <> si) sp st mth
 
     logSize :: TaskInfoSizes -> TaskOutput
     logSize (task, (size,old)) =
-      let method = maybeVal "method not found" $ lookupStruct "method" task :: String
-          arch = maybeVal "arch not found" $ lookupStruct "arch" task :: String
-          arch' = arch ++ replicate (8 - length arch) ' '
-          size' = fmap humanSize size
+      let method = maybeVal "method not found" $ lookupStruct "method" task :: Text
+          arch = maybeVal "arch not found" $ lookupStruct "arch" task :: Text
+          arch' = arch <> T.replicate (8 - T.length arch) " "
           diff = (-) <$> size <*> old
-          diff' = calcSpeed diff
           state = maybeVal "No state found" $ getTaskState task
-          state' = if state == TaskOpen then "" else " " ++ show state
-        in TaskOut arch' (fromMaybe "" size') (fromMaybe "" diff') state' method
+          state' = if state == TaskOpen then "" else T.pack (show state)
+        in TaskOut arch' (maybe "" kiloBytes size) (speed diff) state' method
       where
-        calcSpeed :: Size -> Maybe String
-        calcSpeed Nothing = Nothing
-        calcSpeed (Just s) =
-          Just $ " (" ++ humanSize (s `div` toInteger waitdelay) ++ "/s)"
+        speed :: Size -> Text
+        speed Nothing = ""
+        speed (Just s) =
+          " (" <> kiloBytes (s `div` toInteger waitdelay) <> "/s)"
 
-        humanSize s =
-          getShortHand $ getAppropriateUnits $ ByteValue (fromInteger s) Bytes
+        kiloBytes s = prettyI (Just ',') (fromInteger s `div` 1000) <> "kB"
 
 kojiListBuildTasks :: Maybe String -> IO [TaskID]
 kojiListBuildTasks muser = do
