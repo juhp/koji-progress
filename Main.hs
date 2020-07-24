@@ -20,7 +20,7 @@ import Data.List
 import Data.Maybe
 
 import Fedora.Koji
-import Fedora.Koji.API
+import Fedora.Koji.Internal
 
 import SimpleCmd
 import SimpleCmdArgs
@@ -53,7 +53,7 @@ runOnTasks tids = do
 
 kojiTaskinfoRecursive :: TaskID -> IO BuildTask
 kojiTaskinfoRecursive tid = do
-  children <- kojiGetTaskChildren tid True
+  children <- kojiGetTaskChildren fedoraKojiHub tid True
   return (tid, zip children (repeat Nothing))
 
 type BuildTask = (TaskID, [TaskInfoSize])
@@ -79,7 +79,7 @@ loopBuildTasks mgr bts = do
     runProgress :: BuildTask -> IO BuildTask
     runProgress (tid,tasks) =
       if null tasks then do
-        state <- kojiGetTaskState tid
+        state <- kojiGetTaskState fedoraKojiHub tid
         if state `elem` map Just openTaskStates then do
           threadDelay (waitdelay * 100000)
           kojiTaskinfoRecursive tid
@@ -108,7 +108,7 @@ loopBuildTasks mgr bts = do
     updateTask :: TaskInfoSize -> IO TaskInfoSize
     updateTask (task,size) = do
       let tid = fromJust (readID task)
-      mnew <- kojiGetTaskInfo tid
+      mnew <- kojiGetTaskInfo fedoraKojiHub tid
       case mnew of
         Nothing -> error' $ "TaskInfo not found for " ++ displayID tid
         Just new -> return (new,size)
@@ -173,8 +173,8 @@ kojiListBuildTasks muser = do
               case mfasid of
                 Just fas -> return fas
                 Nothing -> error' "Could not determine FAS id from klist"
-  mowner <- kojiGetUserID user
+  mowner <- kojiGetUserID fedoraKojiHub user
   case mowner of
     Nothing -> error "No owner found"
     Just owner ->
-      kojiListTaskIDs [("method", ValueString "build"), ("owner", ValueInt (getID owner)), ("state", openTaskValues)] [("limit", ValueInt 10)]
+      kojiListTaskIDs fedoraKojiHub [("method", ValueString "build"), ("owner", ValueInt (getID owner)), ("state", openTaskValues)] [("limit", ValueInt 10)]

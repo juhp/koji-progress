@@ -1,6 +1,6 @@
-resolver: lts-14.27
+resolver: lts-15.16
 
 extra-deps:
   - byteunits-0.4.0.2
   - git: https://github.com/juhp/koji-hs.git
-    commit: 9ff1fe697c3d007e23373b4a5d8169bcc18e3e53
+    commit: 84873619d266d31b4be2c1dc6eb24c0128e389dc

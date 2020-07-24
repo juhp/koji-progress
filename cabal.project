@@ -3,4 +3,4 @@ packages: .
 source-repository-package
     type: git
     location: https://github.com/juhp/koji-hs.git
-    tag: 9ff1fe697c3d007e23373b4a5d8169bcc18e3e53
+    tag: a659d03df1eb1afb49b107aa4cbb9cf57e0e24b4
