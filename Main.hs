@@ -63,10 +63,9 @@ kojiTaskinfoRecursive tid = do
 
 type BuildTask = (TaskID, [TaskInfoSize])
 
-type Size = Maybe Integer
 -- FIXME change to (TaskID,Struct,Size)
-type TaskInfoSize = (Struct,Size)
-type TaskInfoSizes = (Struct,(Size,Size))
+type TaskInfoSize = (Struct,Maybe Int)
+type TaskInfoSizes = (Struct,(Maybe Int,Maybe Int))
 
 -- second between polls
 waitdelay :: Int
@@ -123,7 +122,7 @@ buildlogSize mgr (task, old) = do
   exists <- if isJust old then return True
             else httpExists mgr buildlog
   size <- if exists then httpFileSize mgr buildlog else return Nothing
-  return (task,(size,old))
+  return (task,(fromInteger <$> size,old))
   where
     tid = show $ fromJust (readID' task)
     buildlog = "https://kojipkgs.fedoraproject.org/work/tasks" </> lastFew </> tid </> "build.log"
@@ -159,18 +158,18 @@ printLogSizes tss =
           state' = if state == TaskOpen then "" else T.pack (show state)
         in TaskOut arch' (maybe "" kiloBytes size) (speed diff) state' method
       where
-        kiloBytes s = prettyI (Just ',') (fromInteger s `div` 1000) <> "kB"
+        kiloBytes s = prettyI (Just ',') (s `div` 1000) <> "kB"
 
-        speed :: Size -> Text
+        speed :: Maybe Int -> Text
         speed Nothing = ""
+        speed (Just 0) = " (stationary)"
         speed (Just s) =
-          " (" <> showBytes (s `div` toInteger waitdelay) <> "/s)"
+          " (" <> showBytes (s `div` waitdelay) <> "/s)"
 
-        showBytes s = let bytes = fromInteger s
-                          kilo = bytes `div` 1000
+        showBytes s = let kilo = s `div` 1000
                       in if kilo > 0
                          then prettyI (Just ',') kilo <> "kB"
-                         else prettyI (Just ',') bytes <> "B"
+                         else prettyI (Just ',') s <> "B"
 
 kojiListBuildTasks :: Maybe String -> IO [TaskID]
 kojiListBuildTasks muser = do
