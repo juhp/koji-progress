@@ -159,12 +159,18 @@ printLogSizes tss =
           state' = if state == TaskOpen then "" else T.pack (show state)
         in TaskOut arch' (maybe "" kiloBytes size) (speed diff) state' method
       where
+        kiloBytes s = prettyI (Just ',') (fromInteger s `div` 1000) <> "kB"
+
         speed :: Size -> Text
         speed Nothing = ""
         speed (Just s) =
-          " (" <> kiloBytes (s `div` toInteger waitdelay) <> "/s)"
+          " (" <> showBytes (s `div` toInteger waitdelay) <> "/s)"
 
-        kiloBytes s = prettyI (Just ',') (fromInteger s `div` 1000) <> "kB"
+        showBytes s = let bytes = fromInteger s
+                          kilo = bytes `div` 1000
+                      in if kilo > 0
+                         then prettyI (Just ',') kilo <> "kB"
+                         else prettyI (Just ',') bytes <> "B"
 
 kojiListBuildTasks :: Maybe String -> IO [TaskID]
 kojiListBuildTasks muser = do
