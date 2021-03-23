@@ -35,12 +35,12 @@ import System.FilePath (takeBaseName, (</>))
 main :: IO ()
 main =
   simpleCmdArgs' Nothing "koji-progress" "Watch Koji build.log sizes" $
-    runOnTasks <$> many taskArg
+    runOnTasks <$> optionalWith auto 'i' "interval" "SECONDS" "Polling interval between updates (default 120)" 120 <*> many taskArg
   where
     taskArg = TaskId <$> argumentWith auto "TASKID"
 
-runOnTasks :: [TaskID] -> IO ()
-runOnTasks tids = do
+runOnTasks :: Int -> [TaskID] -> IO ()
+runOnTasks waitdelay tids = do
   tasks <-
     if null tids
       then do
@@ -54,7 +54,7 @@ runOnTasks tids = do
       else return tids
   btasks <- mapM kojiTaskinfoRecursive tasks
   mgr <- httpManager
-  loopBuildTasks mgr btasks
+  loopBuildTasks waitdelay mgr btasks
 
 kojiTaskinfoRecursive :: TaskID -> IO BuildTask
 kojiTaskinfoRecursive tid = do
@@ -67,18 +67,14 @@ type BuildTask = (TaskID, [TaskInfoSize])
 type TaskInfoSize = (Struct,Maybe Int)
 type TaskInfoSizes = (Struct,(Maybe Int,Maybe Int))
 
--- second between polls
-waitdelay :: Int
-waitdelay = 120
-
-loopBuildTasks :: Manager -> [BuildTask] -> IO ()
-loopBuildTasks _ [] = return ()
-loopBuildTasks mgr bts = do
+loopBuildTasks :: Int -> Manager -> [BuildTask] -> IO ()
+loopBuildTasks _ _ [] = return ()
+loopBuildTasks waitdelay mgr bts = do
   curs <- filter tasksOpen <$> mapM runProgress bts
   unless (null curs) $ do
     threadDelay (waitdelay * 1000000)
     news <- mapM updateBuildTask curs
-    loopBuildTasks mgr news
+    loopBuildTasks waitdelay mgr news
   where
     runProgress :: BuildTask -> IO BuildTask
     runProgress (tid,tasks) =
@@ -96,7 +92,7 @@ loopBuildTasks mgr bts = do
                     Nothing -> error "No src rpm found"
         logMsg $ nvr ++ " (" ++ displayID tid ++ ")"
         sizes <- mapM (buildlogSize mgr) tasks
-        printLogSizes sizes
+        printLogSizes waitdelay sizes
         let news = map (\(t,(s,_)) -> (t,s)) sizes
             open = filter (\ (t,_) -> getTaskState t `elem` map Just openTaskStates) news
         return (tid, open)
@@ -132,8 +128,8 @@ buildlogSize mgr (task, old) = do
 
 data TaskOutput = TaskOut {_outArch :: Text, outSize :: Text, outSpeed :: Text, _outState :: Text, _method :: Text}
 
-printLogSizes :: [TaskInfoSizes] -> IO ()
-printLogSizes tss =
+printLogSizes :: Int -> [TaskInfoSizes] -> IO ()
+printLogSizes waitdelay tss =
   mapM_ (T.putStrLn . taskOutList) $ (formatSize . map logSize) tss
   where
     taskOutList :: TaskOutput -> Text
