@@ -130,7 +130,7 @@ buildlogSize mgr (task, old) = do
       let few = dropWhile (== '0') $ drop 4 tid in
         if null few then "0" else few
 
-data TaskOutput = TaskOut {_outArch :: Text, outSize :: Text, _outSpeed :: Text, _outState :: Text, _method :: Text}
+data TaskOutput = TaskOut {_outArch :: Text, outSize :: Text, outSpeed :: Text, _outState :: Text, _method :: Text}
 
 printLogSizes :: [TaskInfoSizes] -> IO ()
 printLogSizes tss =
@@ -142,11 +142,12 @@ printLogSizes tss =
     formatSize :: [TaskOutput] -> [TaskOutput]
     formatSize ts =
       let maxlen = maximum $ map (T.length . outSize) ts
-      in map (justifySize maxlen) ts
+          maxsp = maximum $ map (T.length . outSpeed) ts
+      in map (justifyBytes maxlen maxsp) ts
 
-    justifySize :: Int -> TaskOutput -> TaskOutput
-    justifySize ml (TaskOut a si sp st mth) =
-      TaskOut a (T.replicate (ml - T.length si) " " <> si) sp st mth
+    justifyBytes :: Int -> Int -> TaskOutput -> TaskOutput
+    justifyBytes ml ms (TaskOut a si sp st mth) =
+      TaskOut a (T.replicate (ml - T.length si) " " <> si) (T.replicate (ms - T.length sp) " " <> sp) st mth
 
     logSize :: TaskInfoSizes -> TaskOutput
     logSize (task, (size,old)) =
@@ -166,10 +167,7 @@ printLogSizes tss =
         speed (Just s) =
           " (" <> showBytes (s `div` waitdelay) <> "/s)"
 
-        showBytes s = let kilo = s `div` 1000
-                      in if kilo > 0
-                         then prettyI (Just ',') kilo <> "kB"
-                         else prettyI (Just ',') s <> "B"
+        showBytes s = prettyI (Just ',') s <> "B"
 
 kojiListBuildTasks :: Maybe String -> IO [TaskID]
 kojiListBuildTasks muser = do
