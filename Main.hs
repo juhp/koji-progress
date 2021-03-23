@@ -5,7 +5,7 @@
 #else
 import Control.Applicative ((<$>), (<*>))
 #endif
-import Control.Monad (unless)
+import Control.Monad
 
 #if (defined(MIN_VERSION_http_directory) && MIN_VERSION_http_directory(0,1,5))
 #else
@@ -35,12 +35,13 @@ import System.FilePath (takeBaseName, (</>))
 main :: IO ()
 main =
   simpleCmdArgs' Nothing "koji-progress" "Watch Koji build.log sizes" $
-    runOnTasks <$> optionalWith auto 'i' "interval" "SECONDS" "Polling interval between updates (default 120)" 120 <*> many taskArg
+    runOnTasks <$> optionalWith auto 'i' "interval" "MINUTES" "Polling interval between updates (default 2 min)" 2 <*> many taskArg
   where
     taskArg = TaskId <$> argumentWith auto "TASKID"
 
 runOnTasks :: Int -> [TaskID] -> IO ()
 runOnTasks waitdelay tids = do
+  when (waitdelay < 1) $ error' "minimum interval is 1 min"
   tasks <-
     if null tids
       then do
@@ -67,12 +68,15 @@ type BuildTask = (TaskID, [TaskInfoSize])
 type TaskInfoSize = (Struct,Maybe Int)
 type TaskInfoSizes = (Struct,(Maybe Int,Maybe Int))
 
+minute :: Int
+minute = 60 * 1000000
+
 loopBuildTasks :: Int -> Manager -> [BuildTask] -> IO ()
 loopBuildTasks _ _ [] = return ()
 loopBuildTasks waitdelay mgr bts = do
   curs <- filter tasksOpen <$> mapM runProgress bts
   unless (null curs) $ do
-    threadDelay (waitdelay * 1000000)
+    threadDelay (waitdelay * minute)
     news <- mapM updateBuildTask curs
     loopBuildTasks waitdelay mgr news
   where
@@ -81,7 +85,7 @@ loopBuildTasks waitdelay mgr bts = do
       if null tasks then do
         state <- kojiGetTaskState fedoraKojiHub tid
         if state `elem` map Just openTaskStates then do
-          threadDelay (waitdelay * 100000)
+          threadDelay (waitdelay * minute)
           kojiTaskinfoRecursive tid
           else return (tid,[])
       else do
