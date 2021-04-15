@@ -25,7 +25,7 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Data.Text.Format.Numbers
 
-import Fedora.Koji
+import Distribution.Koji
 
 import SimpleCmd
 import SimpleCmdArgs
@@ -183,3 +183,6 @@ kojiListBuildTasks muser = do
     Nothing -> error "No owner found"
     Just owner ->
       kojiListTaskIDs fedoraKojiHub [("method", ValueString "build"), ("owner", ValueInt (getID owner)), ("state", openTaskValues)] [("limit", ValueInt 10)]
+
+maybeVal :: String -> Maybe a -> a
+maybeVal err = fromMaybe (error err)
