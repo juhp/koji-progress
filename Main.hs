@@ -59,7 +59,8 @@ runOnTasks waitdelay tids = do
 
 kojiTaskinfoRecursive :: TaskID -> IO BuildTask
 kojiTaskinfoRecursive tid = do
-  children <- kojiGetTaskChildren fedoraKojiHub tid True
+  children <- sortOn (\t -> lookupStruct "arch" t :: Maybe String) <$>
+              kojiGetTaskChildren fedoraKojiHub tid True
   return (tid, zip children (repeat Nothing))
 
 type BuildTask = (TaskID, [TaskInfoSize])

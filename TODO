@@ -1,5 +1,5 @@
 - support builds as well as tasks
-- order by log size or arch?
+- option to order by log size
 - % of previous build (or finished tasks)
 - mbs urls?
 - average build times? (separate tool?)
