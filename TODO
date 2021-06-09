@@ -2,5 +2,12 @@
 - option to order by log size
 - % of previous build (or finished tasks)
 - mbs urls?
-- average build times? (separate tool?)
+- average build times? (cache or separate tool?)
 - quits during srpm builds
+- show log sizes for old finished builds
+
+- display buildtimes for completed tasks
+
+- pick up user's new builds
+
+- screen mode inplace tui
