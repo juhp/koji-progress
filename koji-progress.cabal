@@ -15,7 +15,7 @@ extra-source-files: ChangeLog.md
 cabal-version:      >=1.10
 
 executable koji-progress
-  main-is:          Main.hs
+  main-is:          src/Main.hs
 
   -- other-modules:
   -- other-extensions:
