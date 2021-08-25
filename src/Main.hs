@@ -7,8 +7,7 @@ import Control.Applicative ((<$>), (<*>))
 #endif
 import Control.Monad
 
-#if (defined(MIN_VERSION_http_directory) && MIN_VERSION_http_directory(0,1,5))
-#else
+#if !MIN_VERSION_http_directory(0,1,5)
 import Network.HTTP.Client (Manager)
 #endif
 import Network.HTTP.Directory
