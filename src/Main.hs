@@ -187,7 +187,9 @@ kojiListBuildTasks muser = do
   case mowner of
     Nothing -> error "No owner found"
     Just owner ->
-      kojiListTaskIDs fedoraKojiHub [("method", ValueString "build"), ("owner", ValueInt (getID owner)), ("state", openTaskValues)] [("limit", ValueInt 10)]
+      kojiListTaskIDs fedoraKojiHub
+      [("method", ValueString "build"), ("owner", ValueInt (getID owner)), ("state", openTaskValues)]
+      [("limit", ValueInt 10)]
 
 maybeVal :: Show a => String -> (a -> Maybe b) -> a -> b
 maybeVal err f v = fromMaybe (error (err ++ ": " ++ show v)) $ f v
