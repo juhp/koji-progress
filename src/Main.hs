@@ -14,6 +14,7 @@ import Network.HTTP.Directory
 
 import Control.Concurrent (threadDelay)
 
+import Data.Fixed
 import Data.List
 import Data.Maybe
 #if !MIN_VERSION_base(4,11,0)
@@ -68,24 +69,26 @@ type BuildTask = (TaskID, [TaskInfoSize])
 type TaskInfoSize = (Struct,Maybe Int)
 type TaskInfoSizes = (Struct,(Maybe Int,Maybe Int))
 
-minute :: Int
-minute = 60 * 1000000
-
 loopBuildTasks :: Int -> Manager -> [BuildTask] -> IO ()
 loopBuildTasks _ _ [] = return ()
 loopBuildTasks waitdelay mgr bts = do
   curs <- filter tasksOpen <$> mapM runProgress bts
   unless (null curs) $ do
-    threadDelay (waitdelay * minute)
+    threadDelayMinutes waitdelay
     news <- mapM updateBuildTask curs
     loopBuildTasks waitdelay mgr news
   where
+    threadDelayMinutes :: Int -> IO ()
+    threadDelayMinutes m =
+      -- convert minutes to microseconds
+      threadDelay (fromEnum (fromIntegral (m * 60) :: Micro))
+
     runProgress :: BuildTask -> IO BuildTask
     runProgress (tid,tasks) =
       if null tasks then do
         state <- kojiGetTaskState fedoraKojiHub tid
         if state `elem` map Just openTaskStates then do
-          threadDelay (waitdelay * minute)
+          threadDelayMinutes waitdelay
           kojiTaskinfoRecursive tid
           else return (tid,[])
       else do
@@ -165,7 +168,7 @@ printLogSizes waitdelay tss =
         speed Nothing = ""
         speed (Just 0) = " (stationary)"
         speed (Just s) =
-          " (" <> showBytes (s `div` waitdelay) <> "/s)"
+          " (" <> showBytes (s `div` waitdelay) <> "/min)"
 
         showBytes s = prettyI (Just ',') s <> "B"
 
