@@ -95,8 +95,10 @@ loopBuildTasks waitdelay mgr bts = do
         putStrLn ""
         let request = lookupStruct "request" $ fst (head tasks) :: Maybe [Value]
             nvr = case request of
-                    Just params -> (takeBaseName . takeBaseName . maybeVal "failed to read src rpm" . getString . head) params
-                    Nothing -> error "No src rpm found"
+                    Just (srpm:_) ->
+                      (takeBaseName . takeBaseName) $
+                      maybeVal "failed to read src rpm" getString srpm
+                    _ -> error "No src rpm found"
         logMsg $ nvr ++ " (" ++ displayID tid ++ ")"
         sizes <- mapM (buildlogSize mgr) tasks
         printLogSizes waitdelay sizes
@@ -154,11 +156,11 @@ printLogSizes waitdelay tss =
 
     logSize :: TaskInfoSizes -> TaskOutput
     logSize (task, (size,old)) =
-      let method = maybeVal "method not found" $ lookupStruct "method" task :: Text
-          arch = maybeVal "arch not found" $ lookupStruct "arch" task :: Text
+      let method = maybeVal "method not found" (lookupStruct "method") task :: Text
+          arch = maybeVal "arch not found" (lookupStruct "arch") task :: Text
           arch' = arch <> T.replicate (8 - T.length arch) " "
           diff = (-) <$> size <*> old
-          state = maybeVal "No state found" $ getTaskState task
+          state = maybeVal "No state found" getTaskState task
           state' = if state == TaskOpen then "" else T.pack (show state)
         in TaskOut arch' (maybe "" kiloBytes size) (speed diff) state' method
       where
@@ -187,5 +189,5 @@ kojiListBuildTasks muser = do
     Just owner ->
       kojiListTaskIDs fedoraKojiHub [("method", ValueString "build"), ("owner", ValueInt (getID owner)), ("state", openTaskValues)] [("limit", ValueInt 10)]
 
-maybeVal :: String -> Maybe a -> a
-maybeVal err = fromMaybe (error err)
+maybeVal :: Show a => String -> (a -> Maybe b) -> a -> b
+maybeVal err f v = fromMaybe (error (err ++ ": " ++ show v)) $ f v
