@@ -1,3 +1,4 @@
+- show the build duration
 - support builds as well as tasks
 - option to order by log size
 - % of previous build (or finished tasks)
