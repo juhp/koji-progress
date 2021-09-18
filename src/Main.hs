@@ -59,9 +59,24 @@ runOnTasks waitdelay tids = do
 
 kojiTaskinfoRecursive :: TaskID -> IO BuildTask
 kojiTaskinfoRecursive tid = do
-  children <- sortOn (\t -> lookupStruct "arch" t :: Maybe String) <$>
-              kojiGetTaskChildren fedoraKojiHub tid True
-  return (tid, zip children (repeat Nothing))
+  mtaskinfo <- kojiGetTaskInfo fedoraKojiHub tid
+  case mtaskinfo of
+    Nothing -> error' $ "taskinfo not found for " ++ displayID tid
+    Just taskinfo -> do
+      parent <-
+        case lookupStruct "method" taskinfo :: Maybe String of
+          Nothing -> error' $ "no method found for " ++ displayID tid
+          Just method ->
+            case method of
+              "build" -> return tid
+              "buildArch" ->
+                case lookupStruct "parent" taskinfo of
+                  Nothing -> error' $ "no parent found for " ++ displayID tid
+                  Just parent -> return (TaskId parent)
+              _ -> error' $ "unsupport method: " ++ method
+      children <- sortOn (\t -> lookupStruct "arch" t :: Maybe String) <$>
+                          kojiGetTaskChildren fedoraKojiHub parent True
+      return (tid, zip children (repeat Nothing))
 
 type BuildTask = (TaskID, [TaskInfoSize])
 
