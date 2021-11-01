@@ -185,13 +185,12 @@ printLogSizes waitdelay tss =
           diff = (-) <$> size <*> old
           state = maybeVal "No state found" getTaskState task
           state' = if state == TaskOpen then "" else T.pack (show state)
-        in TaskOut arch (maybe "" kiloBytes size) (speed diff) state' method
+        in TaskOut arch (maybe "" kiloBytes size) (maybe "" speed diff) state' method
       where
         kiloBytes s = prettyI (Just ',') (s `div` 1000)
 
-        speed :: Maybe Int -> Text
-        speed Nothing = ""
-        speed (Just s) = prettyI (Just ',') (s `div` waitdelay)
+        speed :: Int -> Text
+        speed s = prettyI (Just ',') (s `div` waitdelay)
 
 kojiListBuildTasks :: Maybe String -> IO [TaskID]
 kojiListBuildTasks muser = do
