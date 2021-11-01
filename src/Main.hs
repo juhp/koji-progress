@@ -161,33 +161,38 @@ printLogSizes waitdelay tss =
 
     formatSize :: [TaskOutput] -> [TaskOutput]
     formatSize ts =
-      let maxlen = maximum $ map (T.length . outSize) ts
-          maxsp = maximum $ map (T.length . outSpeed) ts
-      in map (justifyBytes maxlen maxsp) ts
+      let maxsi = maximum $ 6 : map (T.length . outSize) ts
+                  -- "198,689"
+          maxsp = maximum $ 7 : map (T.length . outSpeed) ts
+      in map (justifyBytes maxsi maxsp) ts
 
     justifyBytes :: Int -> Int -> TaskOutput -> TaskOutput
-    justifyBytes ml ms (TaskOut a si sp st mth) =
-      TaskOut a (T.replicate (ml - T.length si) " " <> si) (T.replicate (ms - T.length sp) " " <> sp) st mth
+    justifyBytes maxsi maxsp (TaskOut a si sp st mth) =
+      TaskOut
+      (a  <> T.replicate (7 - T.length a) " ")
+      (T.replicate (maxsi - T.length si) " " <> si <> "kB")
+      (case sp of
+         "" -> ""
+         "stationary" -> "(stationary)"
+         _ -> "[" <> T.replicate (maxsp - T.length sp) " " <> sp <> " B/min" <> "]")
+      st
+      (if mth == "buildArch" then "" else mth)
 
     logSize :: TaskInfoSizes -> TaskOutput
     logSize (task, (size,old)) =
       let method = maybeVal "method not found" (lookupStruct "method") task :: Text
           arch = maybeVal "arch not found" (lookupStruct "arch") task :: Text
-          arch' = arch <> T.replicate (8 - T.length arch) " "
           diff = (-) <$> size <*> old
           state = maybeVal "No state found" getTaskState task
           state' = if state == TaskOpen then "" else T.pack (show state)
-        in TaskOut arch' (maybe "" kiloBytes size) (speed diff) state' method
+        in TaskOut arch (maybe "" kiloBytes size) (speed diff) state' method
       where
-        kiloBytes s = prettyI (Just ',') (s `div` 1000) <> "kB"
+        kiloBytes s = prettyI (Just ',') (s `div` 1000)
 
         speed :: Maybe Int -> Text
         speed Nothing = ""
-        speed (Just 0) = " (stationary)"
-        speed (Just s) =
-          " (" <> showBytes (s `div` waitdelay) <> "/min)"
-
-        showBytes s = prettyI (Just ',') s <> "B"
+        speed (Just 0) = "stationary"
+        speed (Just s) = prettyI (Just ',') (s `div` waitdelay)
 
 kojiListBuildTasks :: Maybe String -> IO [TaskID]
 kojiListBuildTasks muser = do
