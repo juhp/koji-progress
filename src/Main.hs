@@ -155,7 +155,7 @@ printLogSizes waitdelay tss =
   mapM_ (T.putStrLn . taskOutList) $ (formatSize . map logSize) tss
   where
     taskOutList :: TaskOutput -> Text
-    taskOutList (TaskOut a si sp st mth) = T.unwords [a, si, mth, sp, st]
+    taskOutList (TaskOut a si sp st mth) = T.unwords [a, si, sp, st, mth]
 
     formatSize :: [TaskOutput] -> [TaskOutput]
     formatSize ts =
