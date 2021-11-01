@@ -171,7 +171,6 @@ printLogSizes waitdelay tss =
       (T.replicate (maxsi - T.length si) " " <> si <> "kB")
       (case sp of
          "" -> ""
-         "stationary" -> "(stationary)"
          _ -> "[" <> T.replicate (maxsp - T.length sp) " " <> sp <> " B/min" <> "]")
       st
       (case mth of
@@ -192,7 +191,6 @@ printLogSizes waitdelay tss =
 
         speed :: Maybe Int -> Text
         speed Nothing = ""
-        speed (Just 0) = "stationary"
         speed (Just s) = prettyI (Just ',') (s `div` waitdelay)
 
 kojiListBuildTasks :: Maybe String -> IO [TaskID]
