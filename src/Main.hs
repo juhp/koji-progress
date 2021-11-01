@@ -35,24 +35,22 @@ import System.FilePath (takeBaseName, (</>))
 main :: IO ()
 main =
   simpleCmdArgs' Nothing "koji-progress" "Watch Koji build.log sizes" $
-    runOnTasks <$> optionalWith auto 'i' "interval" "MINUTES" "Polling interval between updates (default 2 min)" 2 <*> many taskArg
+    runOnTasks
+    <$> optionalWith auto 'i' "interval" "MINUTES" "Polling interval between updates (default 2 min)" 2
+    <*> switchWith 'm' "modules" "Track module builds"
+    <*> many taskArg
   where
     taskArg = TaskId <$> argumentWith auto "TASKID"
 
-runOnTasks :: Int -> [TaskID] -> IO ()
-runOnTasks waitdelay tids = do
+runOnTasks :: Int -> Bool -> [TaskID] -> IO ()
+runOnTasks waitdelay modules tids = do
   when (waitdelay < 1) $ error' "minimum interval is 1 min"
+  when (modules && not (null tids)) $ error' "cannot combine --modules with tasks"
   tasks <-
     if null tids
-      then do
-      mine <- kojiListBuildTasks Nothing
-      if null mine then do
-        mods <- kojiListBuildTasks $ Just "mbs/mbs.fedoraproject.org"
-        if null mods
-          then error' "no user or modular builds"
-          else return mods
-        else return mine
-      else return tids
+    then kojiListBuildTasks $ if modules then Just "mbs/mbs.fedoraproject.org" else Nothing
+    else return tids
+  when (null tasks) $ error' "no build tasks found"
   btasks <- mapM kojiTaskinfoRecursive tasks
   mgr <- httpManager
   loopBuildTasks waitdelay mgr btasks
