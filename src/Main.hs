@@ -176,7 +176,10 @@ printLogSizes waitdelay tss =
          "stationary" -> "(stationary)"
          _ -> "[" <> T.replicate (maxsp - T.length sp) " " <> sp <> " B/min" <> "]")
       st
-      (if mth == "buildArch" then "" else mth)
+      (case mth of
+         "buildArch" -> ""
+         "buildSRPMFromSCM" -> "SRPM"
+         _ -> mth)
 
     logSize :: TaskInfoSizes -> TaskOutput
     logSize (task, (size,old)) =
